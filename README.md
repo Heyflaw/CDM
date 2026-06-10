@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚽ Pronos CDM 2026
 
-## Getting Started
+Web app de pronostics de la Coupe du Monde 2026 entre amis. Chacun prédit le score
+des matchs, les résultats réels arrivent automatiquement depuis **API-Football**, et
+un classement compare tout le monde.
 
-First, run the development server:
+- **Next.js** (App Router) + **Tailwind CSS**
+- **Supabase** (Postgres + auth magic link)
+- **football-data.org** comme source des matchs/résultats
+- **Vercel Cron** pour synchroniser les scores
+
+## Barème
+
+| Pronostic | Points |
+|-----------|--------|
+| Score exact | **3** |
+| Bon résultat (1/N/2), mauvais score | **1** |
+| Faux | 0 |
+
+Les pronos se verrouillent au coup d'envoi de chaque match.
+
+## Mise en route
+
+### 1. Supabase
+1. Crée un projet sur [supabase.com](https://supabase.com).
+2. SQL Editor → colle et exécute [`supabase/schema.sql`](supabase/schema.sql).
+3. Authentication → Providers → active **Email** (magic link). En local, les liens
+   apparaissent dans Authentication → Logs (ou configure un SMTP).
+4. Récupère l'URL et les clés dans Project Settings → API.
+
+### 2. football-data.org
+Crée un token gratuit sur [football-data.org/client/register](https://www.football-data.org/client/register)
+(free tier : 10 req/min, inclut la Coupe du Monde — code compétition `WC`).
+
+### 3. Variables d'environnement
+Copie `.env.example` en `.env.local` et renseigne les valeurs :
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 4. Lancer en local
+```bash
+npm install
+npm run dev
+```
+Ouvre http://localhost:3000, connecte-toi par email, choisis ton pseudo.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 5. Charger les matchs
+La route `/api/sync` récupère le calendrier et les résultats. Lance-la une fois
+manuellement (puis le cron prend le relais en prod) :
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+curl "http://localhost:3000/api/sync?secret=$CRON_SECRET"
+```
 
-## Learn More
+## Déploiement (Vercel)
+1. Pousse le repo sur GitHub, importe-le sur [Vercel](https://vercel.com).
+2. Ajoute les mêmes variables d'env (dont `CRON_SECRET`).
+3. Dans Supabase → Authentication → URL Configuration, ajoute l'URL de prod
+   (`https://ton-app.vercel.app`) dans **Site URL** et **Redirect URLs**.
+4. Le cron de [`vercel.json`](vercel.json) appelle `/api/sync` toutes les 15 min
+   (1 requête par passage, très en dessous des 10 req/min du free tier). Vercel
+   ajoute automatiquement l'en-tête `Authorization: Bearer <CRON_SECRET>`.
 
-To learn more about Next.js, take a look at the following resources:
+Partage le lien Vercel à tes amis : ils se connectent et c'est parti 🎉
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Structure
+```
+app/
+  page.tsx            # Classement + prochains matchs
+  matchs/             # Liste des matchs + saisie des pronos
+  login/              # Connexion magic link
+  onboarding/         # Choix du pseudo
+  auth/callback/      # Échange du lien magic → session
+  api/sync/           # Synchro football-data.org (cron)
+lib/
+  supabase/           # Clients (browser / server / admin)
+  scoring.ts          # Barème des points
+  types.ts            # Types partagés
+supabase/schema.sql   # Tables + RLS + RPC classement
+```

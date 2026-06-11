@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Jaro } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,8 +12,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const jaro = Jaro({
+  variable: "--font-jaro",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Pronos CDM 2026",
+  title: "POSE TON PRONO",
   description: "Pronostics de la Coupe du Monde 2026 entre amis",
 };
 
@@ -25,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${jaro.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

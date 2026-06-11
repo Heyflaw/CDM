@@ -1,5 +1,4 @@
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { fmtParis } from "@/lib/dates";
 import { hasKickedOff, isFinished, type Match } from "@/lib/types";
 import { TeamLabel } from "./TeamLabel";
 
@@ -23,9 +22,7 @@ export function MatchRow({
         <span>{match.round}</span>
         <span aria-hidden>·</span>
         <span>
-          {format(new Date(match.kickoff_at), "EEE d MMM · HH:mm", {
-            locale: fr,
-          })}
+          {fmtParis(match.kickoff_at, "EEE d MMM · HH:mm")}
         </span>
         {live && (
           <span className="chip ml-1 bg-red-500/15 text-red-400">

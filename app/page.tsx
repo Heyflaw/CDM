@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { format, isToday } from "date-fns";
-import { fr } from "date-fns/locale";
+import { fmtParis, isTodayParis } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import {
   hasKickedOff,
@@ -82,14 +81,14 @@ export default async function HomePage() {
   const pendingGroups = [...buckets.values()]
     .filter(
       (b) =>
-        isToday(new Date(b.firstKick)) &&
+        isTodayParis(b.firstKick) &&
         !hasKickedOff({ kickoff_at: b.firstKick }) &&
         !myGroupPreds.has(b.code)
     )
     .sort((a, z) => a.firstKick.localeCompare(z.firstKick));
 
   // Matchs du jour + pronos d'élimination à poser aujourd'hui.
-  const todayMatches = matches.filter((m) => isToday(new Date(m.kickoff_at)));
+  const todayMatches = matches.filter((m) => isTodayParis(m.kickoff_at));
   const pendingKnockout = todayMatches.filter(
     (m) => !m.group_code && !hasKickedOff(m) && !myPreds.has(m.id)
   );
@@ -152,7 +151,7 @@ export default async function HomePage() {
         {/* ===== Héros + CTA ===== */}
         <header className="animate-fade-up mb-9">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
-            {cap(format(new Date(), "EEEE d MMMM", { locale: fr }))} · CDM 2026
+            {cap(fmtParis(new Date(), "EEEE d MMMM"))} · CDM 2026
           </p>
           {hasTodo ? (
             <>
@@ -169,7 +168,7 @@ export default async function HomePage() {
           ) : (
             <>
               <h1 className="font-display text-6xl uppercase leading-[0.82]">
-                {cap(format(new Date(), "d MMMM", { locale: fr }))}
+                {cap(fmtParis(new Date(), "d MMMM"))}
               </h1>
               <p className="mt-2 text-sm text-muted">
                 {hasLive
@@ -200,7 +199,7 @@ export default async function HomePage() {
                       Groupe {b.code}
                     </h3>
                     <span className="chip bg-surface-2 text-muted">
-                      🔒 {format(new Date(b.firstKick), "HH:mm", { locale: fr })}
+                      🔒 {fmtParis(b.firstKick, "HH:mm")}
                     </span>
                   </div>
                   <GroupPredictionForm groupCode={b.code} teams={b.teams} />

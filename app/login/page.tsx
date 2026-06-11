@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import PlayerIllustration from "../components/PlayerIllustration";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [pseudo, setPseudo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -14,49 +14,86 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+
+    // Réutilise la session existante s'il y en a une, sinon crée un compte anonyme
+    let {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) {
+        setError(
+          error.code === "anonymous_provider_disabled"
+            ? "Connexion anonyme désactivée côté Supabase — active « Allow anonymous sign-ins » dans le dashboard."
+            : error.message
+        );
+        setLoading(false);
+        return;
+      }
+      user = data.user;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({ id: user!.id, display_name: pseudo.trim().slice(0, 40) });
+    if (profileError) {
+      setError(profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Rechargement complet pour que le serveur voie les cookies de session
+    window.location.href = "/";
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">⚽ Pronos CDM 2026</h1>
-        <p className="mt-2 text-sm opacity-70">
-          Connecte-toi pour pronostiquer avec tes amis.
-        </p>
-      </div>
+    <main className="relative min-h-dvh w-full overflow-hidden bg-[#00663A] text-white">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-10 pt-[14dvh]">
+        <PlayerIllustration
+          style={{
+            position: "absolute",
+            left: -121,
+            top: "19dvh",
+            pointerEvents: "none",
+          }}
+        />
 
-      {sent ? (
-        <div className="rounded-lg border border-green-500/40 bg-green-500/10 p-4 text-center text-sm">
-          📬 Lien de connexion envoyé à <strong>{email}</strong>.<br />
-          Ouvre-le sur cet appareil pour te connecter.
+        <header className="relative text-right">
+          <p className="text-[13px] font-bold uppercase tracking-wide">
+            Coupe du monde 2026
+          </p>
+          <h1 className="ml-auto mt-2 max-w-[311px] font-jaro text-[clamp(88px,27vw,108px)] leading-[0.77] text-[#FFFBFB]">
+            POSE TON <span className="text-[#FFCCFD]">PRONO</span>
+          </h1>
+        </header>
+
+        <div className="relative z-10 mt-14">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <p className="text-center text-white/80">
+              Choisis ton pseudo pour défier tes potes.
+            </p>
+            <input
+              type="text"
+              required
+              maxLength={40}
+              value={pseudo}
+              onChange={(e) => setPseudo(e.target.value)}
+              placeholder="Ton pseudo"
+              className="rounded-xl border border-white/20 bg-[#1A754E] px-4 py-3.5 text-white placeholder:text-white/50 outline-none focus:border-white/50"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl bg-[#FFCCFD] px-4 py-3.5 font-bold text-[#1a1a1a] disabled:opacity-50"
+            >
+              {loading ? "Connexion…" : "C'est parti"}
+            </button>
+            {error && (
+              <p className="text-center text-sm text-red-300">{error}</p>
+            )}
+          </form>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ton@email.com"
-            className="rounded-lg border border-black/15 bg-transparent px-4 py-3 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
-          >
-            {loading ? "Envoi…" : "Recevoir le lien magique"}
-          </button>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-        </form>
-      )}
+      </div>
     </main>
   );
 }

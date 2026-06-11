@@ -86,7 +86,7 @@ export default function LoginPage() {
               disabled={loading}
               className="btn btn-primary w-full rounded-xl py-3.5 text-base disabled:opacity-50"
             >
-              {loading ? "Connexion…" : "C'est parti"}
+              {loading ? "Connexion…" : "Let's Goooooooal !"}
             </button>
             {error && (
               <p className="text-center text-sm text-red-400">{error}</p>

@@ -12,9 +12,17 @@ export type Match = {
   home_goals: number | null;
   away_goals: number | null;
   winner: string | null; // 'HOME' | 'AWAY' | 'DRAW' | null (intègre les tirs au but)
+  matchday: number | null; // 1..3 en phase de groupes, null en élimination directe
 };
 
 export type KnockoutPick = "HOME" | "AWAY";
+
+// Prono bonus : les 8 meilleurs troisièmes qualifiés en 16es.
+export type ThirdPlacePrediction = {
+  user_id: string;
+  teams: string[]; // exactement 8 équipes
+  points: number;
+};
 
 // Prono d'élimination directe : on choisit l'équipe qui passe.
 export type Prediction = {

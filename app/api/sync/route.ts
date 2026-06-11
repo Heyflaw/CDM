@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { groupPredictionPoints, knockoutPoints } from "@/lib/scoring";
+import {
+  groupPredictionPoints,
+  knockoutPoints,
+  thirdPlacePoints,
+} from "@/lib/scoring";
 import { isFinished } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +20,7 @@ type ApiMatch = {
   utcDate: string;
   status: string; // SCHEDULED, TIMED, IN_PLAY, PAUSED, FINISHED, ...
   stage: string | null; // GROUP_STAGE, LAST_32, …, FINAL
+  matchday: number | null; // 1..3 en phase de groupes
   group: string | null; // GROUP_A, … (null en phase à élimination directe)
   homeTeam: ApiTeam;
   awayTeam: ApiTeam;
@@ -134,11 +139,18 @@ export async function GET(request: NextRequest) {
       home_goals: m.score.fullTime.home,
       away_goals: m.score.fullTime.away,
       winner: mapWinner(m.score.winner),
+      matchday: groupCode(m) ? m.matchday : null,
       updated_at: new Date().toISOString(),
     }));
 
   if (rows.length > 0) {
-    const { error } = await supabase.from("matches").upsert(rows);
+    let { error } = await supabase.from("matches").upsert(rows);
+    if (error && /matchday/i.test(error.message)) {
+      // Migration « thirds » pas encore appliquée : on synchronise sans la colonne.
+      ({ error } = await supabase
+        .from("matches")
+        .upsert(rows.map(({ matchday: _md, ...r }) => r)));
+    }
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
@@ -257,6 +269,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 6) Score les pronos « meilleurs 3e ». Une équipe est qualifiée comme
+  //    meilleur 3e si elle est 3e de son groupe au classement final ET
+  //    apparaît dans un match de 16es (zéro calcul de départage maison).
+  //    Best-effort : si la table n'existe pas encore (migration), on saute.
+  let updatedThirdPreds = 0;
+  const allGroupsFinished =
+    byGroup.size >= 12 &&
+    [...byGroup.values()].every((g) => g.total > 0 && g.finished === g.total);
+  if (allGroupsFinished) {
+    const thirds = new Set<string>();
+    for (const ordered of groupStandings.values()) {
+      if (ordered[2]) thirds.add(ordered[2]);
+    }
+    const inLast32 = new Set<string>();
+    for (const r of rows) {
+      if (r.stage === "LAST_32") {
+        inLast32.add(r.home_team);
+        inLast32.add(r.away_team);
+      }
+    }
+    const qualified = new Set([...thirds].filter((t) => inLast32.has(t)));
+    if (qualified.size > 0) {
+      const { data: preds, error } = await supabase
+        .from("third_place_predictions")
+        .select("user_id, teams, points");
+      if (!error) {
+        for (const p of preds ?? []) {
+          const pts = thirdPlacePoints(p.teams ?? [], qualified);
+          if (pts !== p.points) {
+            await supabase
+              .from("third_place_predictions")
+              .update({ points: pts })
+              .eq("user_id", p.user_id);
+            updatedThirdPreds += 1;
+          }
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     matches: rows.length,
@@ -264,5 +316,6 @@ export async function GET(request: NextRequest) {
     decidedKnockouts: decided.length,
     updatedGroupPreds,
     updatedKnockoutPreds,
+    updatedThirdPreds,
   });
 }

@@ -40,3 +40,13 @@ export function knockoutPoints(stage: string, correct: boolean): number {
   if (!correct) return 0;
   return KNOCKOUT_POINTS[stage] ?? KNOCKOUT_DEFAULT;
 }
+
+// --- Meilleurs troisièmes : 8 équipes à deviner, 1 pt chacune ---
+export const THIRD_PLACE_POINT = 1; // par équipe correcte (max 8 pts)
+
+export function thirdPlacePoints(
+  picks: string[],
+  qualified: ReadonlySet<string>
+): number {
+  return picks.filter((t) => qualified.has(t)).length * THIRD_PLACE_POINT;
+}

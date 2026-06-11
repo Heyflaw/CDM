@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -7,6 +8,7 @@ import {
   type Match,
   type Prediction,
   type Standing,
+  type ThirdPlacePrediction,
 } from "@/lib/types";
 import Nav from "../components/Nav";
 import { MatchRow } from "../components/MatchRow";
@@ -16,8 +18,17 @@ import {
   type GroupTeam,
 } from "./GroupPredictionForm";
 import { KnockoutPredictionForm } from "./KnockoutPredictionForm";
+import { ThirdPlaceForm } from "./ThirdPlaceForm";
 import { PointsBadge } from "../components/PointsBadge";
 import { frTeam } from "@/lib/teams";
+import { fmtParis } from "@/lib/dates";
+
+const PHASES = [
+  { key: "groupes", label: "Groupes" },
+  { key: "tiers", label: "Meilleurs 3e" },
+  { key: "elimination", label: "Élimination" },
+] as const;
+type PhaseKey = (typeof PHASES)[number]["key"];
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +38,16 @@ type GroupBucket = {
   matches: Match[];
 };
 
-export default async function MatchsPage() {
+export default async function MatchsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ phase?: string }>;
+}) {
+  const { phase: phaseParam } = await searchParams;
+  const phase: PhaseKey = PHASES.some((p) => p.key === phaseParam)
+    ? (phaseParam as PhaseKey)
+    : "groupes";
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -74,6 +94,29 @@ export default async function MatchsPage() {
     (groupPredsData ?? []).map((g) => [g.group_code, g as GroupPrediction])
   );
 
+  // Pronos « meilleurs 3e » : le RLS renvoie les miens, et ceux des autres
+  // une fois la 3e journée commencée. Erreur = migration pas encore appliquée.
+  const { data: thirdData, error: thirdErr } = await supabase
+    .from("third_place_predictions")
+    .select("user_id, teams, points");
+  const thirdsReady = !thirdErr;
+  const thirdPreds = (thirdData ?? []) as ThirdPlacePrediction[];
+  const myThird = thirdPreds.find((t) => t.user_id === user.id);
+
+  // Verrou : coup d'envoi du premier match de la 3e journée (si connue).
+  const md3 = matches.filter((m) => m.group_code && m.matchday === 3);
+  const thirdsLockAt = md3.length > 0 ? md3[0].kickoff_at : null;
+  const thirdsLocked = thirdsLockAt ? hasKickedOff({ kickoff_at: thirdsLockAt }) : false;
+
+  // Pseudos pour l'affichage des pronos des autres après verrouillage.
+  const profilesById = new Map<string, string>();
+  if (thirdsLocked && thirdPreds.length > 0) {
+    const { data: allProfiles } = await supabase
+      .from("profiles")
+      .select("id, display_name");
+    for (const p of allProfiles ?? []) profilesById.set(p.id, p.display_name);
+  }
+
   // Regroupe les matchs de poule par groupe (avec drapeaux).
   const groupsMap = new Map<string, GroupBucket>();
   for (const m of matches) {
@@ -111,8 +154,23 @@ export default async function MatchsPage() {
           </p>
         )}
 
+        {/* ===== Sous-onglets de la page ===== */}
+        <nav className="mb-6 flex gap-2">
+          {PHASES.map((p) => (
+            <Link
+              key={p.key}
+              href={p.key === "groupes" ? "/matchs" : `/matchs?phase=${p.key}`}
+              className={`btn ${
+                phase === p.key ? "btn-primary" : "btn-ghost"
+              }`}
+            >
+              {p.label}
+            </Link>
+          ))}
+        </nav>
+
         {/* ===== Phase de groupes ===== */}
-        {groups.length > 0 && (
+        {phase === "groupes" && groups.length > 0 && (
           <section className="mb-12">
             <SectionTitle kicker="Phase de groupes" title="Tes qualifiés" />
             <p className="mb-2 text-sm text-muted">
@@ -168,8 +226,86 @@ export default async function MatchsPage() {
           </section>
         )}
 
+        {/* ===== Prono bonus : les 8 meilleurs 3e ===== */}
+        {phase === "tiers" && (
+          <section className="mb-12">
+            <SectionTitle kicker="Prono bonus" title="Les 8 meilleurs 3e" />
+            <p className="mb-2 text-sm text-muted">
+              12 groupes, mais 32 qualifiés : les 2 premiers de chaque groupe{" "}
+              <strong className="text-foreground">
+                + les 8 meilleurs troisièmes
+              </strong>
+              . Choisis les 8 équipes qui passeront en 16es grâce à leur 3e
+              place.
+            </p>
+            <p className="mb-4 text-xs text-muted">
+              Barème : <strong className="text-foreground">1 pt</strong> par
+              équipe correcte (max 8).{" "}
+              {thirdsLockAt ? (
+                <>
+                  Verrouillé le{" "}
+                  <strong className="text-foreground">
+                    {fmtParis(thirdsLockAt, "d MMMM 'à' HH:mm")}
+                  </strong>{" "}
+                  (début de la 3e journée).
+                </>
+              ) : (
+                "Verrouillé au début de la 3e journée de groupes."
+              )}
+            </p>
+
+            {!thirdsReady ? (
+              <p className="card p-6 text-center text-sm text-muted">
+                Bientôt disponible 🛠️
+              </p>
+            ) : thirdsLocked ? (
+              <div className="flex flex-col gap-3">
+                {thirdPreds.length === 0 && (
+                  <p className="card p-6 text-center text-sm text-muted/60">
+                    Personne n’a posé ce prono 🔒
+                  </p>
+                )}
+                {[...thirdPreds]
+                  .sort((a, b) =>
+                    a.user_id === user.id ? -1 : b.user_id === user.id ? 1 : 0
+                  )
+                  .map((t) => (
+                    <article key={t.user_id} className="card p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="text-sm font-bold">
+                          {t.user_id === user.id
+                            ? "Tes choix"
+                            : (profilesById.get(t.user_id) ?? "Joueur")}
+                        </h3>
+                        <PointsBadge points={t.points} />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {t.teams.map((team) => (
+                          <span key={team} className="chip bg-surface-2">
+                            {frTeam(team)}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            ) : (
+              <ThirdPlaceForm
+                groups={groups.map((g) => ({ code: g.code, teams: g.teams }))}
+                picks={myThird?.teams ?? []}
+              />
+            )}
+          </section>
+        )}
+
         {/* ===== Élimination directe — à pronostiquer ===== */}
-        {koUpcoming.length > 0 && (
+        {phase === "elimination" && knockout.length === 0 && (
+          <p className="card p-6 text-center text-sm text-muted">
+            Les affiches de la phase finale ne sont pas encore connues — reviens
+            après les groupes ⏳
+          </p>
+        )}
+        {phase === "elimination" && koUpcoming.length > 0 && (
           <section className="mb-12">
             <SectionTitle
               kicker="Élimination directe"
@@ -193,7 +329,7 @@ export default async function MatchsPage() {
         )}
 
         {/* ===== Élimination directe — joués / en cours ===== */}
-        {koStarted.length > 0 && (
+        {phase === "elimination" && koStarted.length > 0 && (
           <section>
             <SectionTitle kicker="Élimination directe" title="Résultats" />
             <div className="mt-1 flex flex-col gap-3">

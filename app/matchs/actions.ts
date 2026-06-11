@@ -72,3 +72,36 @@ export async function saveGroupPrediction(
   revalidatePath("/");
   return { ok: true };
 }
+
+// --- Prono bonus : les 8 meilleurs troisièmes ---
+export async function saveThirdPicks(
+  _prev: SaveResult,
+  formData: FormData
+): Promise<SaveResult> {
+  const teams = formData
+    .getAll("teams")
+    .map((t) => String(t).trim())
+    .filter(Boolean);
+
+  if (new Set(teams).size !== 8) {
+    return { ok: false, error: "Choisis exactement 8 équipes" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Non connecté" };
+
+  // Le RLS bloque l'écriture dès le coup d'envoi de la 3e journée.
+  const { error } = await supabase
+    .from("third_place_predictions")
+    .upsert({ user_id: user.id, teams, updated_at: new Date().toISOString() });
+  if (error) {
+    return { ok: false, error: "Prono verrouillé (3e journée commencée)" };
+  }
+
+  revalidatePath("/matchs");
+  revalidatePath("/");
+  return { ok: true };
+}

@@ -1,10 +1,8 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import player from "../assets/joueur.png";
+import PlayerIllustration from "../components/PlayerIllustration";
 
 export default function LoginPage() {
   const [pseudo, setPseudo] = useState("");
@@ -49,36 +47,31 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen w-full flex-col overflow-hidden px-6 pb-10 pt-12">
-      {/* Illustration en fond */}
-      <img
-        src={player.src}
-        alt=""
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 left-1/2 h-[62vh] w-auto max-w-none -translate-x-1/2 select-none"
-      />
+    <main className="relative min-h-dvh w-full overflow-hidden">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-10 pt-[14dvh]">
+        <PlayerIllustration
+          style={{
+            position: "absolute",
+            left: -121,
+            top: "19dvh",
+            pointerEvents: "none",
+          }}
+        />
 
-      {/* Titre, 3 lignes, calé à droite */}
-      <div className="animate-fade-up relative z-10 text-right">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
-          Coupe du Monde 2026
-        </p>
-        <h1 className="font-display text-7xl uppercase leading-[0.82]">
-          Pose
-          <br />
-          ton
-          <br />
-          <span className="text-accent">prono</span>
-        </h1>
-      </div>
-
-      {/* Card de connexion par-dessus */}
-      <div className="animate-fade-up relative z-10 mx-auto mt-auto w-full max-w-md">
-        <div className="card border-border bg-background/70 p-5 backdrop-blur-md">
-          <p className="mb-3 text-center text-sm text-muted">
-            Choisis ton pseudo pour défier tes potes.
+        <header className="animate-fade-up relative text-right">
+          <p className="text-[13px] font-bold uppercase tracking-widest">
+            Coupe du monde 2026
           </p>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <h1 className="ml-auto mt-2 max-w-[311px] font-display text-[clamp(88px,27vw,108px)] leading-[0.77]">
+            POSE TON <span className="text-accent">PRONO</span>
+          </h1>
+        </header>
+
+        <div className="animate-fade-up relative z-10 mt-14">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <p className="text-center text-muted">
+              Choisis ton pseudo pour défier tes potes.
+            </p>
             <input
               type="text"
               required
@@ -86,16 +79,18 @@ export default function LoginPage() {
               value={pseudo}
               onChange={(e) => setPseudo(e.target.value)}
               placeholder="Ton pseudo"
-              className="rounded-xl border border-border px-4 py-3 outline-none transition focus:border-accent"
+              className="rounded-xl border border-border px-4 py-3.5 outline-none transition focus:border-accent"
             />
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full py-3 disabled:opacity-50"
+              className="btn btn-primary w-full rounded-xl py-3.5 text-base disabled:opacity-50"
             >
               {loading ? "Connexion…" : "C'est parti"}
             </button>
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && (
+              <p className="text-center text-sm text-red-400">{error}</p>
+            )}
           </form>
         </div>
       </div>

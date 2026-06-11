@@ -1,27 +1,165 @@
 @import "tailwindcss";
 
+/* Thème "night stadium" — dark only, assumé. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+
+  --background: #00663a; /* vert sapin profond */
+  --surface: #0a6f44; /* carte (légèrement relevée) */
+  --surface-2: #11804f; /* boutons / champs / état idle */
+  --border: #2c9268; /* filet vert clair */
+  --foreground: #f1fbf6;
+  --muted: #a6d2bd;
+
+  --accent: #ffccfd; /* rose */
+  --accent-ink: #06351f; /* texte sur le rose (vert très foncé) */
+  --gold: #ffc93c;
+  --silver: #dbe5ef;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-jaro: var(--font-jaro);
-}
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-display), "Arial Narrow", sans-serif;
+  --font-body: var(--font-body), system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(
+      1100px 520px at 50% -8%,
+      rgba(255, 204, 253, 0.14),
+      transparent 60%
+    ),
+    radial-gradient(
+      760px 460px at 100% 0%,
+      rgba(255, 255, 255, 0.05),
+      transparent 55%
+    ),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+}
+
+/* Lignes de terrain très discrètes en fond. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.018) 0,
+    rgba(255, 255, 255, 0.018) 1px,
+    transparent 1px,
+    transparent 120px
+  );
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-border bg-surface;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset,
+      0 18px 40px -28px rgba(0, 0, 0, 0.9);
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn-primary {
+    @apply bg-accent text-accent-ink;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.05);
+  }
+  .btn-ghost {
+    @apply border border-border bg-surface-2 text-foreground;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide;
+  }
+}
+
+/* Champs de formulaire (login / onboarding) cohérents avec le thème. */
+input,
+select,
+textarea {
+  background: var(--surface-2);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+input::placeholder {
+  color: var(--muted);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.animate-pop {
+  animation: pop 0.28s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.live-dot {
+  animation: livePulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-pop,
+  .live-dot {
+    animation: none;
+  }
 }

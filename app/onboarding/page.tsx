@@ -17,26 +17,32 @@ export default async function OnboardingPage() {
   if (profile) redirect("/");
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">Bienvenue 👋</h1>
-        <p className="mt-2 text-sm opacity-70">
-          Choisis le pseudo qui apparaîtra dans le classement.
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-7 px-6">
+      <div className="animate-fade-up text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+          Bienvenue 👋
+        </p>
+        <h1 className="font-display text-5xl uppercase leading-none">
+          Ton pseudo
+        </h1>
+        <p className="mt-3 text-sm text-muted">
+          Le nom qui apparaîtra dans le classement.
         </p>
       </div>
-      <form action={saveDisplayName} className="flex flex-col gap-3">
+      <form
+        action={saveDisplayName}
+        className="animate-fade-up flex flex-col gap-3"
+        style={{ animationDelay: "80ms" }}
+      >
         <input
           name="display_name"
           required
           maxLength={40}
           placeholder="Ton pseudo"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
+          className="rounded-xl border border-border px-4 py-3 outline-none transition focus:border-accent"
         />
-        <button
-          type="submit"
-          className="rounded-lg bg-foreground px-4 py-3 font-medium text-background"
-        >
-          C'est parti
+        <button type="submit" className="btn btn-primary w-full py-3">
+          C&apos;est parti
         </button>
       </form>
     </main>

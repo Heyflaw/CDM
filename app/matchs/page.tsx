@@ -1,17 +1,31 @@
 import { redirect } from "next/navigation";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
-import { hasKickedOff, type Match, type Prediction } from "@/lib/types";
+import {
+  hasKickedOff,
+  isFinished,
+  type GroupPrediction,
+  type Match,
+  type Prediction,
+  type Standing,
+} from "@/lib/types";
 import Nav from "../components/Nav";
-import { TeamLabel } from "../components/TeamLabel";
-import { PredictionForm } from "./PredictionForm";
+import { MatchRow } from "../components/MatchRow";
+import { CollapsibleStandings } from "../components/CollapsibleStandings";
+import {
+  GroupPredictionForm,
+  type GroupTeam,
+} from "./GroupPredictionForm";
+import { KnockoutPredictionForm } from "./KnockoutPredictionForm";
+import { PointsBadge } from "../components/PointsBadge";
+import { frTeam } from "@/lib/teams";
 
 export const dynamic = "force-dynamic";
 
-function kickoffLabel(iso: string) {
-  return format(new Date(iso), "EEE d MMM · HH:mm", { locale: fr });
-}
+type GroupBucket = {
+  code: string;
+  teams: GroupTeam[];
+  matches: Match[];
+};
 
 export default async function MatchsPage() {
   const supabase = await createClient();
@@ -41,75 +55,186 @@ export default async function MatchsPage() {
     (predsData ?? []).map((p) => [p.match_id, p as Prediction])
   );
 
-  const upcoming = matches.filter((m) => !hasKickedOff(m));
-  const started = matches.filter((m) => hasKickedOff(m)).reverse();
+  const { data: groupPredsData } = await supabase
+    .from("group_predictions")
+    .select("*")
+    .eq("user_id", user.id);
+  const { data: standingsData } = await supabase
+    .from("standings")
+    .select("*")
+    .order("position", { ascending: true });
+  const standingsByGroup = new Map<string, Standing[]>();
+  for (const s of (standingsData ?? []) as Standing[]) {
+    const arr = standingsByGroup.get(s.group_code) ?? [];
+    arr.push(s);
+    standingsByGroup.set(s.group_code, arr);
+  }
+
+  const myGroupPreds = new Map<string, GroupPrediction>(
+    (groupPredsData ?? []).map((g) => [g.group_code, g as GroupPrediction])
+  );
+
+  // Regroupe les matchs de poule par groupe (avec drapeaux).
+  const groupsMap = new Map<string, GroupBucket>();
+  for (const m of matches) {
+    if (!m.group_code) continue;
+    const bucket =
+      groupsMap.get(m.group_code) ??
+      ({ code: m.group_code, teams: [], matches: [] } as GroupBucket);
+    bucket.matches.push(m);
+    for (const [name, flag] of [
+      [m.home_team, m.home_flag],
+      [m.away_team, m.away_flag],
+    ] as const) {
+      if (!bucket.teams.some((t) => t.name === name)) {
+        bucket.teams.push({ name, flag });
+      }
+    }
+    groupsMap.set(m.group_code, bucket);
+  }
+  const groups = [...groupsMap.values()].sort((a, b) =>
+    a.code.localeCompare(b.code)
+  );
+  for (const g of groups) g.teams.sort((a, b) => a.name.localeCompare(b.name));
+
+  const knockout = matches.filter((m) => !m.group_code);
+  const koUpcoming = knockout.filter((m) => !hasKickedOff(m));
+  const koStarted = knockout.filter((m) => hasKickedOff(m)).reverse();
 
   return (
     <>
       <Nav active="matchs" displayName={profile.display_name} />
       <main className="mx-auto w-full max-w-2xl px-4 py-6">
         {matches.length === 0 && (
-          <p className="rounded-lg border border-black/10 p-6 text-center text-sm opacity-70 dark:border-white/10">
-            Aucun match chargé pour l’instant. Lance une synchro
-            (<code>/api/sync</code>) pour récupérer le calendrier.
+          <p className="card p-6 text-center text-sm text-muted">
+            Aucun match chargé pour l’instant.
           </p>
         )}
 
-        {upcoming.length > 0 && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-lg font-bold">À pronostiquer</h2>
-            <div className="flex flex-col gap-3">
-              {upcoming.map((m) => (
-                <article
+        {/* ===== Phase de groupes ===== */}
+        {groups.length > 0 && (
+          <section className="mb-12">
+            <SectionTitle kicker="Phase de groupes" title="Tes qualifiés" />
+            <p className="mb-2 text-sm text-muted">
+              Choisis les équipes qui finissent{" "}
+              <span className="text-gold">1er</span> et{" "}
+              <span className="text-silver">2e</span> de chaque groupe. Verrouillé
+              au coup d’envoi du premier match du groupe.
+            </p>
+            <p className="mb-4 text-xs text-muted">
+              Barème : bonne équipe à la bonne place ={" "}
+              <strong className="text-foreground">3 pts</strong> · bonne équipe
+              mais place inversée ={" "}
+              <strong className="text-foreground">1 pt</strong> (max 6 / groupe).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {groups.map((g, i) => {
+                const started = g.matches.some((m) => hasKickedOff(m));
+                const finished = g.matches.every((m) => isFinished(m.status));
+                const pred = myGroupPreds.get(g.code);
+                const standings = standingsByGroup.get(g.code) ?? [];
+                return (
+                  <article
+                    key={g.code}
+                    className="card animate-fade-up p-4"
+                    style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="font-display text-2xl leading-none">
+                        Groupe {g.code}
+                      </h3>
+                      {started && (
+                        <span className="chip bg-surface-2 text-muted">
+                          🔒 {finished ? "terminé" : "en cours"}
+                        </span>
+                      )}
+                    </div>
+                    {!started ? (
+                      <GroupPredictionForm
+                        groupCode={g.code}
+                        teams={g.teams}
+                        prediction={pred}
+                      />
+                    ) : (
+                      <LockedGroup pred={pred} finished={finished} />
+                    )}
+                    {standings.length > 0 && (
+                      <CollapsibleStandings rows={standings} />
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ===== Élimination directe — à pronostiquer ===== */}
+        {koUpcoming.length > 0 && (
+          <section className="mb-12">
+            <SectionTitle
+              kicker="Élimination directe"
+              title="À pronostiquer"
+            />
+            <div className="mt-1 flex flex-col gap-3">
+              {koUpcoming.map((m) => (
+                <MatchRow
                   key={m.id}
-                  className="rounded-xl border border-black/10 p-4 dark:border-white/10"
-                >
-                  <p className="mb-2 text-center text-xs uppercase tracking-wide opacity-50">
-                    {m.round} · {kickoffLabel(m.kickoff_at)}
-                  </p>
-                  <PredictionForm match={m} prediction={myPreds.get(m.id)} />
-                </article>
+                  match={m}
+                  footer={
+                    <KnockoutPredictionForm
+                      match={m}
+                      prediction={myPreds.get(m.id)}
+                    />
+                  }
+                />
               ))}
             </div>
           </section>
         )}
 
-        {started.length > 0 && (
+        {/* ===== Élimination directe — joués / en cours ===== */}
+        {koStarted.length > 0 && (
           <section>
-            <h2 className="mb-3 text-lg font-bold">Matchs joués / en cours</h2>
-            <div className="flex flex-col gap-3">
-              {started.map((m) => {
+            <SectionTitle kicker="Élimination directe" title="Résultats" />
+            <div className="mt-1 flex flex-col gap-3">
+              {koStarted.map((m) => {
                 const pred = myPreds.get(m.id);
+                const myTeam = pred
+                  ? pred.pick === "HOME"
+                    ? m.home_team
+                    : m.away_team
+                  : null;
+                const qualifier =
+                  m.winner === "HOME"
+                    ? m.home_team
+                    : m.winner === "AWAY"
+                      ? m.away_team
+                      : null;
                 return (
-                  <article
+                  <MatchRow
                     key={m.id}
-                    className="rounded-xl border border-black/10 p-4 dark:border-white/10"
-                  >
-                    <p className="mb-2 text-center text-xs uppercase tracking-wide opacity-50">
-                      {m.round} · {kickoffLabel(m.kickoff_at)}
-                    </p>
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <TeamLabel
-                        name={m.home_team}
-                        flag={m.home_flag}
-                        align="right"
-                      />
-                      <div className="text-center text-lg font-bold tabular-nums">
-                        {m.home_goals ?? "-"} : {m.away_goals ?? "-"}
+                    match={m}
+                    highlightWinner
+                    footer={
+                      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
+                        {qualifier && (
+                          <span className="text-muted">
+                            ✅ {frTeam(qualifier)} se qualifie
+                          </span>
+                        )}
+                        {myTeam ? (
+                          <span className="text-muted">
+                            Ton choix : {frTeam(myTeam)}
+                          </span>
+                        ) : (
+                          <span className="text-muted/60">Pas de prono</span>
+                        )}
+                        {pred && isFinished(m.status) && (
+                          <PointsBadge points={pred.points} />
+                        )}
                       </div>
-                      <TeamLabel name={m.away_team} flag={m.away_flag} />
-                    </div>
-                    <div className="mt-2 flex items-center justify-center gap-3 text-xs">
-                      {pred ? (
-                        <span className="opacity-60">
-                          Ton prono : {pred.home_pred}-{pred.away_pred}
-                        </span>
-                      ) : (
-                        <span className="opacity-40">Pas de prono</span>
-                      )}
-                      {pred && <PointsBadge points={pred.points} />}
-                    </div>
-                  </article>
+                    }
+                  />
                 );
               })}
             </div>
@@ -120,16 +245,52 @@ export default async function MatchsPage() {
   );
 }
 
-function PointsBadge({ points }: { points: number }) {
-  const cls =
-    points === 3
-      ? "bg-green-500/15 text-green-600 dark:text-green-400"
-      : points === 1
-        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-        : "bg-black/5 opacity-60 dark:bg-white/10";
+// Kaio n'a ni accents ni apostrophe : on rend le titre sans diacritiques,
+// en capitales (la police d'affichage du projet).
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function SectionTitle({ kicker, title }: { kicker: string; title: string }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 font-semibold ${cls}`}>
-      +{points} pt{points > 1 ? "s" : ""}
-    </span>
+    <div className="mb-3">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+        {kicker}
+      </p>
+      <h2 className="font-display text-3xl uppercase leading-none">
+        {stripAccents(title)}
+      </h2>
+    </div>
+  );
+}
+
+function LockedGroup({
+  pred,
+  finished,
+}: {
+  pred?: GroupPrediction;
+  finished: boolean;
+}) {
+  if (!pred) {
+    return <p className="py-2 text-sm text-muted/60">Pas de prono 🔒</p>;
+  }
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <span className="flex items-center gap-2">
+        <span className="chip bg-gold/15 text-gold">1er</span>
+        {frTeam(pred.first_team)}
+      </span>
+      <span className="flex items-center gap-2">
+        <span className="chip bg-silver/15 text-silver">2e</span>
+        {frTeam(pred.second_team)}
+      </span>
+      <div className="mt-1">
+        {finished ? (
+          <PointsBadge points={pred.points} />
+        ) : (
+          <span className="text-xs text-muted">⏳ en attente du classement</span>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Jaro } from "next/font/google";
+import { Jaro, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Jaro : police d'affichage (titres, chiffres, logo). Google font variable
+// avec accents complets → utilisable partout, y compris le texte accentué.
+const display = Jaro({
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const jaro = Jaro({
-  variable: "--font-jaro",
+// Hanken Grotesk : toute l'UI / le corps de texte.
+const body = Hanken_Grotesk({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
@@ -30,9 +28,9 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} ${jaro.variable} h-full antialiased`}
+      className={`dark ${display.variable} ${body.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

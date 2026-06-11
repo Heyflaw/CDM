@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
+import { frTeam } from "@/lib/teams";
+
 export function TeamLabel({
   name,
   flag,
@@ -26,7 +28,7 @@ export function TeamLabel({
       ) : (
         <span className="h-[22px] w-[22px] shrink-0" />
       )}
-      <span className="truncate text-sm font-medium">{name}</span>
+      <span className="truncate text-sm font-medium">{frTeam(name)}</span>
     </div>
   );
 }
